@@ -1,55 +1,46 @@
 package edu.ticket;
 
+import edu.ticket.factory.AssignmentStrategyFactory;
+import edu.ticket.factory.ResponseStrategyFactory;
+import edu.ticket.log.ConsoleLogger;
+import edu.ticket.log.Logger;
+
+/**
+ * Orchestrates ticket processing.
+ *
+ * After refactor:
+ * - Lifecycle transitions are delegated to TicketState (State pattern)
+ * - Assignment/Response behaviours are delegated to strategies (Strategy pattern)
+ * - Strategy selection is centralized in factories (Factory)
+ */
 public class TicketService {
 
+    private final TicketContext context;
+
+    public TicketService() {
+        Logger logger = new ConsoleLogger();
+        this.context = new TicketContext(
+                logger,
+                new AssignmentStrategyFactory(),
+                new ResponseStrategyFactory()
+        );
+    }
+
+    public TicketService(TicketContext context) {
+        this.context = context;
+    }
 
     public void handle(Ticket ticket) {
-        String currentStatus = ticket.status;
-        String type = ticket.type;
-        String channel = ticket.channel;
-
-        if (currentStatus.equals("NEW")) {
-            System.out.println("Ticket created");
-
-            if (channel.equals("WEB")) {
-                System.out.println("Received from web");
-            } else if (channel.equals("EMAIL")) {
-                System.out.println("Received from email");
-            }
-
-            ticket.setStatus("ASSIGNED");
+        // Drive the state machine until CLOSED.
+        while (!ticket.isClosed()) {
+            ticket.getState().handle(ticket, context);
         }
 
-        if (currentStatus.equals("ASSIGNED")) {
-            if (type.equals("BUG")) {
-                System.out.println("Assigned to engineering");
-            } else {
-                System.out.println("Assigned to support");
-            }
-            ticket.setStatus("IN_PROGRESS");
-        }
-
-        if (currentStatus.equals("IN_PROGRESS")) {
-            System.out.println("Working on ticket");
-
-            if (type.equals("BUG")) {
-                System.out.println("Sending bug response");
-            } else {
-                System.out.println("Sending generic response");
-            }
-
-            ticket.setStatus("RESOLVED");
-        }
-
-        if (currentStatus.equals("RESOLVED")) {
-            System.out.println("Ticket resolved");
-            ticket.setStatus("CLOSED") ;
-        }
-
-        if (currentStatus.equals("CLOSED")) {
-            System.out.println("Ticket closed");
-        }
-
-        System.out.println("Logging ticket handling : " + ticket.getId() + " -> " + ticket.status);
+        // End-of-processing log (explicit requirement in the assignment)
+        context.getLogger().log(
+                "Logging ticket handling: " + ticket.getId() +
+                        " -> " + ticket.getStatus() +
+                        (ticket.getResponse() != null ? " | response=\"" + ticket.getResponse() + "\"" : "")
+        );
     }
 }
